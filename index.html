@@ -352,7 +352,18 @@
   // width we actually have, compute exactly the --card-w that fills it.
   function resizeClock() {
     const availableWidth = document.documentElement.clientWidth; // fills 100% of width, no margin
-    let cardW = availableWidth / 8.55;
+    const availableHeight = document.documentElement.clientHeight;
+
+    // Total clock width = 8.55 x --card-w, total height = 3.66 x --card-w
+    // (same ratios used throughout). Whichever dimension is tighter wins,
+    // so the clock can never be clipped in either direction - this trades
+    // away guaranteed full-width fill in exchange for guaranteed no clipping,
+    // which matters most on mobile where the person can't manually resize
+    // the embed block to compensate the way they can on desktop.
+    const cardWFromWidth = availableWidth / 8.55;
+    const cardWFromHeight = availableHeight / 3.66;
+    let cardW = Math.min(cardWFromWidth, cardWFromHeight);
+
     cardW = Math.max(18, Math.min(cardW, 160)); // sane safety bounds
     document.documentElement.style.setProperty('--card-w', cardW + 'px');
   }
