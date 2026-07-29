@@ -5,13 +5,16 @@
 <title>Flip Clock</title>
 <style>
   :root {
-    /* Scales with the embed's width (vw = % of iframe viewport width),
-       clamped between a sensible min and max so it never gets unreadably
-       tiny or absurdly huge. Height is derived from width via a fixed
-       ratio (66/30 = 2.2) so proportions never break as it scales. */
-    --card-w: clamp(20px, 6vw, 34px);
+    --card-w: 60px; /* fallback - overridden precisely by JS below on load/resize */
     --card-h: calc(var(--card-w) * 2.2);
     --font-size: calc(var(--card-h) * 0.78);
+
+    /* Color customization - overridden by JS from URL params (?bg=...&fg=...) */
+    --bg-color: #141414;
+    --fg-color: #ffffff;
+    --fg-color-dim: #cfcfcf;   /* top-half of digits - computed from fg+bg */
+    --label-color: #7a7a7a;    /* AM/PM text - computed from fg+bg */
+    --crease-color: rgba(0,0,0,0.55);
   }
 
   * { box-sizing: border-box; }
@@ -20,6 +23,8 @@
     margin: 0;
     padding: 0;
     height: 100%;
+    width: 100%;
+    overflow: hidden;
     background: transparent;
     font-family: Arial, Helvetica, sans-serif;
     display: flex;
@@ -40,7 +45,7 @@
     position: relative;
     display: flex;
     flex-direction: column;
-    background: #141414;
+    background: var(--bg-color);
     border-radius: calc(var(--card-w) * 0.47);
     overflow: hidden;
     padding: calc(var(--card-w) * 0.73) calc(var(--card-w) * 1.07)
@@ -54,7 +59,7 @@
     font-size: calc(var(--card-w) * 0.43);
     font-weight: 700;
     letter-spacing: 1px;
-    color: #7a7a7a;
+    color: var(--label-color);
     line-height: 1;
   }
 
@@ -85,12 +90,12 @@
 
   .flip-card .digit.top {
     top: 0;
-    color: #cfcfcf;
+    color: var(--fg-color-dim);
   }
 
   .flip-card .digit.bottom {
     bottom: 0;
-    color: #ffffff;
+    color: var(--fg-color);
   }
 
   .flip-card .digit span {
@@ -111,7 +116,7 @@
     left: 0;
     right: 0;
     height: 1px;
-    background: rgba(0,0,0,0.55);
+    background: var(--crease-color);
     z-index: 20;
   }
 
@@ -126,7 +131,7 @@
     overflow: hidden;
     z-index: 10;
     backface-visibility: hidden;
-    background: #141414;
+    background: var(--bg-color);
   }
 
   .flap span {
@@ -139,7 +144,7 @@
 
   .flap.top-flap {
     top: 0;
-    color: #cfcfcf;
+    color: var(--fg-color-dim);
     transform-origin: bottom;
     transform: rotateX(0deg);
     transition: transform 0.3s ease-in;
@@ -147,7 +152,7 @@
 
   .flap.bottom-flap {
     top: 50%;
-    color: #ffffff;
+    color: var(--fg-color);
     transform-origin: top;
     transform: rotateX(90deg);
     transition: transform 0.3s ease-out;
@@ -165,6 +170,41 @@
 <div class="clock" id="clock"></div>
 
 <script>
+  // --- Color customization from URL params (?bg=1a1a2e&fg=ffcc00) ---
+  function hexToRgb(hex) {
+    hex = hex.replace('#', '');
+    if (hex.length === 3) hex = hex.split('').map(c => c + c).join('');
+    const num = parseInt(hex, 16);
+    return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+  }
+
+  function mix(hexA, hexB, weightA) {
+    const a = hexToRgb(hexA), b = hexToRgb(hexB);
+    const r = Math.round(a.r * weightA + b.r * (1 - weightA));
+    const g = Math.round(a.g * weightA + b.g * (1 - weightA));
+    const bl = Math.round(a.b * weightA + b.b * (1 - weightA));
+    return `rgb(${r}, ${g}, ${bl})`;
+  }
+
+  (function applyColorsFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const bgParam = params.get('bg');
+    const fgParam = params.get('fg');
+
+    // Only override if the params are present and look like valid hex
+    const isHex = v => v && /^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(v);
+
+    const bg = isHex(bgParam) ? '#' + bgParam.replace('#', '') : '#141414';
+    const fg = isHex(fgParam) ? '#' + fgParam.replace('#', '') : '#ffffff';
+
+    const root = document.documentElement.style;
+    root.setProperty('--bg-color', bg);
+    root.setProperty('--fg-color', fg);
+    root.setProperty('--fg-color-dim', mix(fg, bg, 0.65));   // dimmer top-half
+    root.setProperty('--label-color', mix(fg, bg, 0.45));    // muted AM/PM
+    root.setProperty('--crease-color', mix('#000000', bg, 0.55));
+  })();
+
   const clock = document.getElementById('clock');
   const groups = ['hh', 'mm'];
   const state = {};
@@ -291,6 +331,21 @@
   })();
 
   setInterval(tick, 1000);
+
+  // Precisely size the clock so it always fills the available width, exactly.
+  // Total rendered width = 8.55 * --card-w (derived from the gap/padding
+  // multipliers used throughout the CSS: 2 boxes x [2 cards + 2x1.07 padding]
+  // + 1 inter-box gap of 0.27). We solve that equation backwards: given the
+  // width we actually have, compute exactly the --card-w that fills it.
+  function resizeClock() {
+    const availableWidth = document.documentElement.clientWidth * 0.96; // small breathing margin
+    let cardW = availableWidth / 8.55;
+    cardW = Math.max(18, Math.min(cardW, 160)); // sane safety bounds
+    document.documentElement.style.setProperty('--card-w', cardW + 'px');
+  }
+
+  window.addEventListener('resize', resizeClock);
+  resizeClock();
 </script>
 
 </body>
