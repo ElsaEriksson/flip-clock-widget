@@ -194,6 +194,7 @@
     const params = new URLSearchParams(window.location.search);
     const bgParam = params.get('bg');
     const fgParam = params.get('fg');
+    const creaseParam = params.get('crease');
 
     // Only override if the params are present and look like valid hex
     const isHex = v => v && /^[0-9a-fA-F]{3}$|^[0-9a-fA-F]{6}$/.test(v);
@@ -206,7 +207,11 @@
     root.setProperty('--fg-color', fg);
     root.setProperty('--fg-color-dim', mix(fg, bg, 0.65));   // dimmer top-half
     root.setProperty('--label-color', mix(fg, bg, 0.45));    // muted AM/PM
-    root.setProperty('--crease-color', mix('#000000', bg, 0.22));
+
+    // Crease line: use the explicit color if provided, otherwise
+    // auto-compute a subtle darker shade of the background (default).
+    const crease = isHex(creaseParam) ? '#' + creaseParam.replace('#', '') : mix('#000000', bg, 0.22);
+    root.setProperty('--crease-color', crease);
   })();
 
   const clock = document.getElementById('clock');
