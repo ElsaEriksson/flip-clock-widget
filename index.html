@@ -68,6 +68,20 @@
     justify-content: center;
   }
 
+  /* One continuous crease line per box, edge-to-edge (spans the padding
+     too), instead of a separate short line per card. Box padding-top and
+     padding-bottom are equal, so the box's vertical midpoint always lines
+     up exactly with the digits' own midpoint. */
+  .time-box .box-crease {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: var(--crease-color);
+    z-index: 20;
+  }
+
   .flip-card {
     position: relative;
     width: var(--card-w);
@@ -110,16 +124,6 @@
   .flip-card .digit.bottom span { top: calc(var(--card-h) / -2); }
 
   /* subtle per-digit crease line, not a full-width divider */
-  .flip-card .crease {
-    position: absolute;
-    top: 50%;
-    left: 0;
-    right: 0;
-    height: 1px;
-    background: var(--crease-color);
-    z-index: 20;
-  }
-
   /* Flaps - the pieces that physically rotate. JS controls their transform directly. */
   .flip-card .flap {
     position: absolute;
@@ -202,7 +206,7 @@
     root.setProperty('--fg-color', fg);
     root.setProperty('--fg-color-dim', mix(fg, bg, 0.65));   // dimmer top-half
     root.setProperty('--label-color', mix(fg, bg, 0.45));    // muted AM/PM
-    root.setProperty('--crease-color', mix('#000000', bg, 0.55));
+    root.setProperty('--crease-color', mix('#000000', bg, 0.22));
   })();
 
   const clock = document.getElementById('clock');
@@ -222,6 +226,10 @@
       box.appendChild(label);
     }
 
+    const boxCrease = document.createElement('div');
+    boxCrease.className = 'box-crease';
+    box.appendChild(boxCrease);
+
     const row = document.createElement('div');
     row.className = 'digits-row';
 
@@ -231,7 +239,6 @@
       card.innerHTML = `
         <div class="digit top"><span>0</span></div>
         <div class="digit bottom"><span>0</span></div>
-        <div class="crease"></div>
         <div class="flap top-flap"><span>0</span></div>
         <div class="flap bottom-flap"><span>0</span></div>
       `;
@@ -338,7 +345,7 @@
   // + 1 inter-box gap of 0.27). We solve that equation backwards: given the
   // width we actually have, compute exactly the --card-w that fills it.
   function resizeClock() {
-    const availableWidth = document.documentElement.clientWidth * 0.96; // small breathing margin
+    const availableWidth = document.documentElement.clientWidth; // fills 100% of width, no margin
     let cardW = availableWidth / 8.55;
     cardW = Math.max(18, Math.min(cardW, 160)); // sane safety bounds
     document.documentElement.style.setProperty('--card-w', cardW + 'px');
