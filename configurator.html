@@ -42,7 +42,6 @@
 
   .preview-box iframe {
     width: 100%;
-    height: 140px;
     border: none;
     display: block;
   }
@@ -166,6 +165,17 @@
       <input type="color" id="fgPicker" value="#ffffff">
       <div class="hex" id="fgHex">#ffffff</div>
     </div>
+    <div class="control">
+      <label for="creasePicker">
+        Crease line
+        <span style="font-weight:400;color:#777;">
+          &nbsp;— <input type="checkbox" id="creaseAuto" checked style="vertical-align:middle;">
+          <span style="font-weight:400;">auto</span>
+        </span>
+      </label>
+      <input type="color" id="creasePicker" value="#000000" disabled>
+      <div class="hex" id="creaseHex">auto (matches background)</div>
+    </div>
   </div>
 
   <div class="link-section">
@@ -185,8 +195,11 @@
 <script>
   const bgPicker = document.getElementById('bgPicker');
   const fgPicker = document.getElementById('fgPicker');
+  const creasePicker = document.getElementById('creasePicker');
+  const creaseAuto = document.getElementById('creaseAuto');
   const bgHex = document.getElementById('bgHex');
   const fgHex = document.getElementById('fgHex');
+  const creaseHex = document.getElementById('creaseHex');
   const preview = document.getElementById('preview');
   const generatedLink = document.getElementById('generatedLink');
   const copyBtn = document.getElementById('copyBtn');
@@ -207,16 +220,40 @@
   function buildUrl() {
     const bg = bgPicker.value.replace('#', '');
     const fg = fgPicker.value.replace('#', '');
-    return `${clockBaseUrl()}?bg=${bg}&fg=${fg}`;
+    let url = `${clockBaseUrl()}?bg=${bg}&fg=${fg}`;
+    if (!creaseAuto.checked) {
+      url += `&crease=${creasePicker.value.replace('#', '')}`;
+    }
+    return url;
   }
 
   function update() {
     bgHex.textContent = bgPicker.value;
     fgHex.textContent = fgPicker.value;
+    creaseHex.textContent = creaseAuto.checked ? 'auto (matches background)' : creasePicker.value;
     const url = buildUrl();
     generatedLink.value = url;
     preview.src = url;
   }
+
+  creaseAuto.addEventListener('change', () => {
+    creasePicker.disabled = creaseAuto.checked;
+    update();
+  });
+  creasePicker.addEventListener('input', update);
+
+  // Set the preview iframe's height precisely from its own measured
+  // rendered width (same ratio the clock itself uses: 8.55 : 3.66).
+  // Measuring in JS instead of trusting CSS aspect-ratio, since we can't
+  // see this render live to verify the CSS-only approach actually holds.
+  function sizePreviewFrame() {
+    const renderedWidth = preview.getBoundingClientRect().width;
+    const height = renderedWidth / (8.55 / 3.66);
+    preview.style.height = height + 'px';
+  }
+
+  window.addEventListener('resize', sizePreviewFrame);
+  sizePreviewFrame();
 
   bgPicker.addEventListener('input', update);
   fgPicker.addEventListener('input', update);
