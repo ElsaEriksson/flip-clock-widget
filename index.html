@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<title>Flip Clock</title>
+<style>
+  :root {
+    /* Scales with the embed's width (vw = % of iframe viewport width),
+       clamped between a sensible min and max so it never gets unreadably
+       tiny or absurdly huge. Height is derived from width via a fixed
+       ratio (66/30 = 2.2) so proportions never break as it scales. */
+    --card-w: clamp(20px, 6vw, 34px);
+    --card-h: calc(var(--card-w) * 2.2);
+    --font-size: calc(var(--card-h) * 0.78);
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: transparent;
+    font-family: Arial, Helvetica, sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .clock {
+    display: flex;
+    gap: calc(var(--card-w) * 0.27);
+    align-items: stretch;
+  }
+
+  /* One black rounded box per group (hours / minutes). overflow:hidden means
+     the two digit-cards inside can be plain rectangles - the box clips
+     their corners for us, giving one seamless rounded rectangle. */
+  .time-box {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    background: #141414;
+    border-radius: calc(var(--card-w) * 0.47);
+    overflow: hidden;
+    padding: calc(var(--card-w) * 0.73) calc(var(--card-w) * 1.07)
+             calc(var(--card-w) * 0.73) calc(var(--card-w) * 1.07);
+  }
+
+  .ampm-label {
+    position: absolute;
+    top: calc(var(--card-w) * 0.27);
+    left: calc(var(--card-w) * 0.27);
+    font-size: calc(var(--card-w) * 0.43);
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: #7a7a7a;
+    line-height: 1;
+  }
+
+  .digits-row {
+    display: flex;
+    justify-content: center;
+  }
+
+  .flip-card {
+    position: relative;
+    width: var(--card-w);
+    height: var(--card-h);
+    perspective: 300px;
+  }
+
+  /* Static halves - always show the CURRENT digit, updated instantly by JS.
+     No background of their own - the .time-box behind them provides it. */
+  .flip-card .digit {
+    position: absolute;
+    width: 100%;
+    height: 50%;
+    font-size: var(--font-size);
+    font-weight: 800;
+    line-height: var(--card-h);
+    text-align: center;
+    overflow: hidden;
+  }
+
+  .flip-card .digit.top {
+    top: 0;
+    color: #cfcfcf;
+  }
+
+  .flip-card .digit.bottom {
+    bottom: 0;
+    color: #ffffff;
+  }
+
+  .flip-card .digit span {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    line-height: var(--card-h);
+  }
+
+  .flip-card .digit.top span { top: 0; }
+  .flip-card .digit.bottom span { top: calc(var(--card-h) / -2); }
+
+  /* subtle per-digit crease line, not a full-width divider */
+  .flip-card .crease {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: rgba(0,0,0,0.55);
+    z-index: 20;
+  }
+
+  /* Flaps - the pieces that physically rotate. JS controls their transform directly. */
+  .flip-card .flap {
+    position: absolute;
+    width: 100%;
+    height: 50%;
+    left: 0;
+    font-size: var(--font-size);
+    font-weight: 800;
+    overflow: hidden;
+    z-index: 10;
+    backface-visibility: hidden;
+    background: #141414;
+  }
+
+  .flap span {
+    position: absolute;
+    left: 0;
+    width: 100%;
+    text-align: center;
+    line-height: var(--card-h);
+  }
+
+  .flap.top-flap {
+    top: 0;
+    color: #cfcfcf;
+    transform-origin: bottom;
+    transform: rotateX(0deg);
+    transition: transform 0.3s ease-in;
+  }
+
+  .flap.bottom-flap {
+    top: 50%;
+    color: #ffffff;
+    transform-origin: top;
+    transform: rotateX(90deg);
+    transition: transform 0.3s ease-out;
+  }
+
+  .flap.bottom-flap span { top: calc(var(--card-h) / -2); }
+
+  .no-transition {
+    transition: none !important;
+  }
+</style>
+</head>
+<body>
+
+<div class="clock" id="clock"></div>
+
+<script>
+  const clock = document.getElementById('clock');
+  const groups = ['hh', 'mm'];
+  const state = {};
+
+  function buildBox(id, withLabel) {
+    const box = document.createElement('div');
+    box.className = 'time-box';
+    box.id = id;
+
+    if (withLabel) {
+      const label = document.createElement('div');
+      label.className = 'ampm-label';
+      label.id = 'ampm-label';
+      label.textContent = 'AM';
+      box.appendChild(label);
+    }
+
+    const row = document.createElement('div');
+    row.className = 'digits-row';
+
+    for (let i = 0; i < 2; i++) {
+      const card = document.createElement('div');
+      card.className = 'flip-card';
+      card.innerHTML = `
+        <div class="digit top"><span>0</span></div>
+        <div class="digit bottom"><span>0</span></div>
+        <div class="crease"></div>
+        <div class="flap top-flap"><span>0</span></div>
+        <div class="flap bottom-flap"><span>0</span></div>
+      `;
+      row.appendChild(card);
+    }
+    box.appendChild(row);
+    return box;
+  }
+
+  groups.forEach((g, idx) => {
+    clock.appendChild(buildBox(g, idx === 0));
+    state[g] = ['00', '00'];
+  });
+
+  function snap(el, transformValue) {
+    el.classList.add('no-transition');
+    el.style.transform = transformValue;
+    void el.offsetHeight;
+    el.classList.remove('no-transition');
+  }
+
+  function setDigit(cardEl, newVal, oldVal) {
+    if (newVal === oldVal) return;
+
+    const topSpan = cardEl.querySelector('.digit.top span');
+    const bottomSpan = cardEl.querySelector('.digit.bottom span');
+    const topFlap = cardEl.querySelector('.flap.top-flap');
+    const bottomFlap = cardEl.querySelector('.flap.bottom-flap');
+    const topFlapSpan = topFlap.querySelector('span');
+    const bottomFlapSpan = bottomFlap.querySelector('span');
+
+    topSpan.textContent = newVal;
+    topFlap.style.transform = 'rotateX(-90deg)';
+
+    setTimeout(() => {
+      topFlapSpan.textContent = newVal;
+      snap(topFlap, 'rotateX(0deg)');
+
+      bottomFlapSpan.textContent = newVal;
+      bottomFlap.style.transform = 'rotateX(0deg)';
+
+      setTimeout(() => {
+        bottomSpan.textContent = newVal;
+        snap(bottomFlap, 'rotateX(90deg)');
+      }, 300);
+    }, 300);
+  }
+
+  function updateUnit(id, valueStr) {
+    const unit = document.getElementById(id);
+    const cards = unit.querySelectorAll('.flip-card');
+    const digits = valueStr.split('');
+    const old = state[id];
+
+    digits.forEach((d, i) => {
+      if (d !== old[i]) {
+        setDigit(cards[i], d, old[i]);
+      }
+    });
+    state[id] = digits;
+  }
+
+  function pad(n) { return n.toString().padStart(2, '0'); }
+
+  function tick() {
+    const now = new Date();
+    let h = now.getHours() % 12;
+    if (h === 0) h = 12;
+    updateUnit('hh', pad(h));
+    updateUnit('mm', pad(now.getMinutes()));
+
+    const label = document.getElementById('ampm-label');
+    label.textContent = now.getHours() >= 12 ? 'PM' : 'AM';
+  }
+
+  (function init() {
+    const now = new Date();
+    let h = now.getHours() % 12;
+    if (h === 0) h = 12;
+    const hh = pad(h).split('');
+    const mm = pad(now.getMinutes()).split('');
+    const map = { hh, mm };
+
+    ['hh', 'mm'].forEach(id => {
+      const unit = document.getElementById(id);
+      const cards = unit.querySelectorAll('.flip-card');
+      map[id].forEach((d, i) => {
+        cards[i].querySelector('.digit.top span').textContent = d;
+        cards[i].querySelector('.digit.bottom span').textContent = d;
+        cards[i].querySelector('.flap.top-flap span').textContent = d;
+        cards[i].querySelector('.flap.bottom-flap span').textContent = d;
+      });
+      state[id] = map[id];
+    });
+
+    document.getElementById('ampm-label').textContent = now.getHours() >= 12 ? 'PM' : 'AM';
+  })();
+
+  setInterval(tick, 1000);
+</script>
+
+</body>
+</html>
